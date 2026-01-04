@@ -12,21 +12,20 @@ openId = os.environ.get("OPEN_ID")
 # 天气预报模板ID
 weather_template_id = os.environ.get("TEMPLATE_ID")
 
-def get_weather_by_code(city_code, city_name="太原小店区"):
+def get_weather_by_code(city_code, city_name="太原市小店区"):
     """
-    使用中国天气网 JSON 接口，支持区县级
+    使用 itboy 天气接口（GitHub Actions 可用）
     """
-    url = f"https://www.weather.com.cn/data/sk/{city_code}.html"
-    resp = requests.get(url, headers={"User-Agent": "Mozilla/5.0"}, timeout=10)
-    resp.encoding = "utf-8"
+    url = "https://t.weather.itboy.net/api/weather/city/101100107"
+    resp = requests.get(url, timeout=10)
+    data = resp.json()["data"]
 
-    data = resp.json()["weatherinfo"]
-
-    temp = f'{data["temp"]}℃'
-    weather = data.get("weather", "未知")
-    wind = f'{data["WD"]}{data["WS"]}'
+    temp = f'{data["wendu"]}℃'
+    weather = data["forecast"][0]["type"]
+    wind = data["forecast"][0]["fx"] + data["forecast"][0]["fl"]
 
     return city_name, temp, weather, wind
+
 
 
 
