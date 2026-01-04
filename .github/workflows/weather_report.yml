@@ -1,12 +1,9 @@
-# This workflow will install Python dependencies, run tests and lint with a single version of Python
-# For more information see: https://docs.github.com/en/actions/automating-builds-and-tests/building-and-testing-python
-
 name: 天气预报推送
 
 on:
   schedule:
-    # 设置启动时间，为 UTC 时间, UTC23点 对应北京时间早7点
-    - cron : '00 23 * * *'
+    # 每天北京时间早7点推送
+    - cron: '0 23 * * *'
   workflow_dispatch:
 
 permissions:
@@ -14,23 +11,21 @@ permissions:
 
 jobs:
   build:
-
     runs-on: ubuntu-latest
     env:
       TZ: Asia/Shanghai
     steps:
     - uses: actions/checkout@v3
-    - name: Set up Python 3.12
+    - name: Set up Python
       uses: actions/setup-python@v3
       with:
-        python-version: "3.12"
+        python-version: '3.12'
     - name: Install dependencies
       run: |
         python -m pip install --upgrade pip
-        if [ -f requirements.txt ]; then pip install -r requirements.txt; fi
-    - name: Run weather Report
-      run: |
-        python weather_report.py
+        pip install requests
+    - name: Run weather report
+      run: python weather_report.py
       env:
         APP_ID: ${{ secrets.APP_ID }}
         APP_SECRET: ${{ secrets.APP_SECRET }}
