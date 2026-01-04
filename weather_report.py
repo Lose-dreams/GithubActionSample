@@ -3,9 +3,10 @@ import os
 import requests
 import json
 import datetime
+import time
 
 # 多人接收微信号，用逗号分隔
-# 例如 GitHub Secrets: OPEN_ID=wxid1,wxid2
+# 例如 GitHub Secrets: OPEN_ID=oBgkT3QA4nu7IZBtXMCJhsbOL8R8,oBgkT3btpd8TnK2llvaq30bqcsAA
 openIds = os.environ.get("OPEN_ID").split(",")
 
 # 测试号信息
@@ -15,42 +16,66 @@ appSecret = os.environ.get("APP_SECRET")
 # 天气模板ID
 weather_template_id = os.environ.get("TEMPLATE_ID")
 
+# 网络请求重试参数
+TIMEOUT = 10       # 秒
+RETRY = 3          # 次数
+RETRY_DELAY = 5    # 秒
+
 
 def get_weather_by_code(city_code=None, city_name="太原市小店区"):
     """使用 wttr.in 获取太原小店区天气（稳定、支持GitHub Actions）"""
     url = "https://wttr.in/Taiyuan?format=j1"
-    resp = requests.get(url, timeout=10)
-    data = resp.json()
-
-    today = data["weather"][0]
-
-    temp = f'{today["avgtempC"]}℃'
-    weather = today["hourly"][0]["weatherDesc"][0]["value"]
-    wind = today["hourly"][0]["windspeedKmph"] + " km/h"
-
-    return city_name, temp, weather, wind
+    for attempt in range(RETRY):
+        try:
+            resp = requests.get(url, timeout=TIMEOUT)
+            data = resp.json()
+            today = data["weather"][0]
+            temp = f'{today["avgtempC"]}℃'
+            weather = today["hourly"][0]["weatherDesc"][0]["value"]
+            wind = today["hourly"][0]["windspeedKmph"] + " km/h"
+            return city_name, temp, weather, wind
+        except Exception as e:
+            print(f"获取天气失败，重试中 ({attempt+1}/{RETRY}): {e}")
+            time.sleep(RETRY_DELAY)
+    raise Exception("获取天气失败，请检查网络")
 
 
 def get_access_token():
-    """获取微信 access_token"""
+    """获取微信 access_token，支持重试"""
     url = f'https://api.weixin.qq.com/cgi-bin/token?grant_type=client_credential&appid={appID.strip()}&secret={appSecret.strip()}'
-    response = requests.get(url).json()
-    access_token = response.get('access_token')
-    print("获取 access_token:", access_token)
-    return access_token
+    for attempt in range(RETRY):
+        try:
+            response = requests.get(url, timeout=TIMEOUT).json()
+            access_token = response.get('access_token')
+            if access_token:
+                print("获取 access_token:", access_token)
+                return access_token
+            else:
+                print(f"获取 access_token 失败: {response}")
+                time.sleep(RETRY_DELAY)
+        except Exception as e:
+            print(f"获取 access_token 网络错误，重试中 ({attempt+1}/{RETRY}): {e}")
+            time.sleep(RETRY_DELAY)
+    raise Exception("无法获取 access_token，请检查网络或配置")
 
 
 def get_daily_love():
-    """每日一句情话"""
+    """每日一句情话，支持重试"""
     url = "https://api.lovelive.tools/api/SweetNothings/Serialization/Json"
-    r = requests.get(url)
-    all_dict = json.loads(r.text)
-    sentence = all_dict['returnObj'][0]
-    return sentence
+    for attempt in range(RETRY):
+        try:
+            r = requests.get(url, timeout=TIMEOUT)
+            all_dict = r.json()
+            sentence = all_dict['returnObj'][0]
+            return sentence
+        except Exception as e:
+            print(f"获取每日一句失败，重试中 ({attempt+1}/{RETRY}): {e}")
+            time.sleep(RETRY_DELAY)
+    return "今日心情：保持微笑~"
 
 
 def send_weather(access_token, weather):
-    """循环发送给每个微信号"""
+    """循环发送给每个微信号，支持重试"""
     today = datetime.date.today()
     today_str = today.strftime("%Y年%m月%d日")
 
@@ -68,11 +93,25 @@ def send_weather(access_token, weather):
                 "today_note": {"value": get_daily_love()}
             }
         }
-        resp = requests.post(
-            f'https://api.weixin.qq.com/cgi-bin/message/template/send?access_token={access_token}',
-            json=body
-        )
-        print(f"{openId.strip()} 推送结果: {resp.text}")
+        for attempt in range(RETRY):
+            try:
+                resp = requests.post(
+                    f'https://api.weixin.qq.com/cgi-bin/message/template/send?access_token={access_token}',
+                    json=body,
+                    timeout=TIMEOUT
+                )
+                resp_json = resp.json()
+                if resp_json.get("errcode") == 0:
+                    print(f"{openId.strip()} 推送成功")
+                    break
+                else:
+                    print(f"{openId.strip()} 推送失败: {resp_json}")
+                    time.sleep(RETRY_DELAY)
+            except Exception as e:
+                print(f"{openId.strip()} 网络错误，重试中 ({attempt+1}/{RETRY}): {e}")
+                time.sleep(RETRY_DELAY)
+        else:
+            print(f"{openId.strip()} 最终推送失败")
 
 
 def weather_report():
