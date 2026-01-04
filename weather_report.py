@@ -2,7 +2,7 @@
 import os
 import requests
 import json
-from bs4 import BeautifulSoup
+
 
 # 从测试号信息获取
 appID = os.environ.get("APP_ID")
@@ -17,7 +17,7 @@ def get_weather_by_code(city_code, city_name="太原小店区"):
     使用中国天气网 JSON 接口，支持区县级
     """
     url = f"http://www.weather.com.cn/data/sk/{city_code}.html"
-    resp = requests.get(url, timeout=10)
+    resp = requests.get(url, headers={"User-Agent": "Mozilla/5.0"}, timeout=10)
     resp.encoding = "utf-8"
 
     data = resp.json()["weatherinfo"]
