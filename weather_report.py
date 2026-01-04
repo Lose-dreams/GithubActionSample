@@ -109,4 +109,5 @@ def weather_report():
 
 
 if __name__ == '__main__':
-    weather_report("淄博")
+    weather_report()
+
