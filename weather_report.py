@@ -1,40 +1,77 @@
-# 安装依赖 pip3 install requests html5lib bs4 schedule
 import os
 import requests
 import json
-
+import datetime
 
 # 从测试号信息获取
 appID = os.environ.get("APP_ID")
 appSecret = os.environ.get("APP_SECRET")
-# 收信人ID即 用户列表中的微信号
 openId = os.environ.get("OPEN_ID")
-# 天气预报模板ID
 weather_template_id = os.environ.get("TEMPLATE_ID")
 
 def get_weather_by_code(city_code=None, city_name="太原市小店区"):
+    """
+    使用 wttr.in 中文映射，稳定，GitHub Actions 可用
+    """
     url = "https://wttr.in/Taiyuan?format=j1"
     resp = requests.get(url, timeout=10)
     data = resp.json()
-
     today = data["weather"][0]
 
-    temp = f'{today["avgtempC"]}℃'
-    weather = today["hourly"][0]["weatherDesc"][0]["value"]
-    wind = today["hourly"][0]["windspeedKmph"] + " km/h"
+    # 气温区间
+    low = today["mintempC"]
+    high = today["maxtempC"]
+    temperature = f"{low}--{high}摄氏度"
 
-    return city_name, temp, weather, wind
+    # 英文天气 → 中文
+    weather_en = today["hourly"][0]["weatherDesc"][0]["value"]
+    weather_map = {
+        "Sunny": "晴",
+        "Partly cloudy": "多云",
+        "Cloudy": "阴",
+        "Overcast": "阴",
+        "Light rain": "小雨",
+        "Moderate rain": "中雨",
+        "Heavy rain": "大雨",
+        "Light snow": "小雪",
+        "Moderate snow": "中雪",
+        "Heavy snow": "大雪",
+        "Light freezing rain": "冻雨",
+        "Freezing rain": "冻雨",
+    }
+    weather = weather_map.get(weather_en, weather_en)
 
+    # 风向 + 风级
+    wind_en = today["hourly"][0]["winddir16Point"]
+    wind_speed = int(today["hourly"][0]["windspeedKmph"])
+    wind_map = {
+        "N": "北风",
+        "NE": "东北风",
+        "E": "东风",
+        "SE": "东南风",
+        "S": "南风",
+        "SW": "西南风",
+        "W": "西风",
+        "NW": "西北风"
+    }
+    wind_dir = wind_map.get(wind_en, wind_en)
 
+    # 风速对应风级
+    if wind_speed < 6:
+        wind = f"{wind_dir}<3级"
+    elif wind_speed < 12:
+        wind = f"{wind_dir}3-4级"
+    elif wind_speed < 20:
+        wind = f"{wind_dir}4-5级"
+    else:
+        wind = f"{wind_dir}5-6级"
 
+    return city_name, temperature, weather, wind
 
 
 def get_access_token():
-    # 获取access token的url
-    url = 'https://api.weixin.qq.com/cgi-bin/token?grant_type=client_credential&appid={}&secret={}' \
-        .format(appID.strip(), appSecret.strip())
+    url = f'https://api.weixin.qq.com/cgi-bin/token?grant_type=client_credential&appid={appID.strip()}&secret={appSecret.strip()}'
     response = requests.get(url).json()
-    print(response)
     access_token = response.get('access_token')
     return access_token
 
@@ -44,69 +81,38 @@ def get_daily_love():
     url = "https://api.lovelive.tools/api/SweetNothings/Serialization/Json"
     r = requests.get(url)
     all_dict = json.loads(r.text)
-    sentence = all_dict['returnObj'][0]
-    daily_love = sentence
-    return daily_love
+    return all_dict['returnObj'][0]
 
 
 def send_weather(access_token, weather):
-    # touser 就是 openID
-    # template_id 就是模板ID
-    # url 就是点击模板跳转的url
-    # data就按这种格式写，time和text就是之前{{time.DATA}}中的那个time，value就是你要替换DATA的值
-
-    import datetime
-    today = datetime.date.today()
-    today_str = today.strftime("%Y年%m月%d日")
-
+    today_str = datetime.date.today().strftime("%Y年%m月%d日")
     body = {
         "touser": openId.strip(),
         "template_id": weather_template_id.strip(),
         "url": "https://weixin.qq.com",
         "data": {
-            "date": {
-                "value": today_str
-            },
-            "region": {
-                "value": weather[0]
-            },
-            "weather": {
-                "value": weather[2]
-            },
-            "temp": {
-                "value": weather[1]
-            },
-            "wind_dir": {
-                "value": weather[3]
-            },
-            "today_note": {
-                "value": get_daily_love()
-            }
+            "date": {"value": today_str},
+            "region": {"value": weather[0]},
+            "weather": {"value": weather[2]},
+            "temp": {"value": weather[1]},
+            "wind_dir": {"value": weather[3]},
+            "today_note": {"value": get_daily_love()}
         }
     }
-    url = 'https://api.weixin.qq.com/cgi-bin/message/template/send?access_token={}'.format(access_token)
+    url = f'https://api.weixin.qq.com/cgi-bin/message/template/send?access_token={access_token}'
     print(requests.post(url, json.dumps(body)).text)
 
 
-
 def weather_report():
-    # 1. 获取 access_token
     access_token = get_access_token()
-
-    # 2. 获取 太原市小店区 天气（区县级）
-    weather = get_weather_by_code(
-        city_code="101100107",
-        city_name="太原市小店区"
-    )
-
-    print(f"天气信息：{weather}")
-
-    # 3. 推送微信模板消息
+    weather = get_weather_by_code()
+    print(f"今天:{datetime.date.today().strftime('%Y年%m月%d日')}")
+    print(f"地区:{weather[0]}")
+    print(f"天气:{weather[2]}")
+    print(f"气温:{weather[1]}")
+    print(f"风向:{weather[3]}")
     send_weather(access_token, weather)
-
-
 
 
 if __name__ == '__main__':
     weather_report()
-
