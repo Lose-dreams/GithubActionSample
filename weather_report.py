@@ -16,7 +16,7 @@ def get_weather_by_code(city_code, city_name="太原小店区"):
     """
     使用中国天气网 JSON 接口，支持区县级
     """
-    url = f"http://www.weather.com.cn/data/sk/{city_code}.html"
+    url = f"https://www.weather.com.cn/data/sk/{city_code}.html"
     resp = requests.get(url, headers={"User-Agent": "Mozilla/5.0"}, timeout=10)
     resp.encoding = "utf-8"
 
