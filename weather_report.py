@@ -12,50 +12,22 @@ openId = os.environ.get("OPEN_ID")
 # 天气预报模板ID
 weather_template_id = os.environ.get("TEMPLATE_ID")
 
-def get_weather(my_city):
-    urls = ["http://www.weather.com.cn/textFC/hb.shtml",
-            "http://www.weather.com.cn/textFC/db.shtml",
-            "http://www.weather.com.cn/textFC/hd.shtml",
-            "http://www.weather.com.cn/textFC/hz.shtml",
-            "http://www.weather.com.cn/textFC/hn.shtml",
-            "http://www.weather.com.cn/textFC/xb.shtml",
-            "http://www.weather.com.cn/textFC/xn.shtml"
-            ]
-    for url in urls:
-        resp = requests.get(url)
-        text = resp.content.decode("utf-8")
-        soup = BeautifulSoup(text, 'html5lib')
-        div_conMidtab = soup.find("div", class_="conMidtab")
-        tables = div_conMidtab.find_all("table")
-        for table in tables:
-            trs = table.find_all("tr")[2:]
-            for index, tr in enumerate(trs):
-                tds = tr.find_all("td")
-                # 这里倒着数，因为每个省会的td结构跟其他不一样
-                city_td = tds[-8]
-                this_city = list(city_td.stripped_strings)[0]
-                if this_city == my_city:
+def get_weather_by_code(city_code, city_name="太原小店区"):
+    """
+    使用中国天气网 JSON 接口，支持区县级
+    """
+    url = f"http://www.weather.com.cn/data/sk/{city_code}.html"
+    resp = requests.get(url, timeout=10)
+    resp.encoding = "utf-8"
 
-                    high_temp_td = tds[-5]
-                    low_temp_td = tds[-2]
-                    weather_type_day_td = tds[-7]
-                    weather_type_night_td = tds[-4]
-                    wind_td_day = tds[-6]
-                    wind_td_day_night = tds[-3]
+    data = resp.json()["weatherinfo"]
 
-                    high_temp = list(high_temp_td.stripped_strings)[0]
-                    low_temp = list(low_temp_td.stripped_strings)[0]
-                    weather_typ_day = list(weather_type_day_td.stripped_strings)[0]
-                    weather_type_night = list(weather_type_night_td.stripped_strings)[0]
+    temp = f'{data["temp"]}℃'
+    weather = data.get("weather", "未知")
+    wind = f'{data["WD"]}{data["WS"]}'
 
-                    wind_day = list(wind_td_day.stripped_strings)[0] + list(wind_td_day.stripped_strings)[1]
-                    wind_night = list(wind_td_day_night.stripped_strings)[0] + list(wind_td_day_night.stripped_strings)[1]
+    return city_name, temp, weather, wind
 
-                    # 如果没有白天的数据就使用夜间的
-                    temp = f"{low_temp}——{high_temp}摄氏度" if high_temp != "-" else f"{low_temp}摄氏度"
-                    weather_typ = weather_typ_day if weather_typ_day != "-" else weather_type_night
-                    wind = f"{wind_day}" if wind_day != "--" else f"{wind_night}"
-                    return this_city, temp, weather_typ, wind
 
 
 def get_access_token():
