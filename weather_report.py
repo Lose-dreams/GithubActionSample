@@ -16,7 +16,7 @@ def get_weather_by_code(city_code, city_name="太原市小店区"):
     """
     使用 itboy 天气接口（GitHub Actions 可用）
     """
-    url = "https://t.weather.itboy.net/api/weather/city/101100107"
+    url = "http://t.weather.itboy.net/api/weather/city/101100107"
     resp = requests.get(url, timeout=10)
     data = resp.json()["data"]
 
