@@ -90,14 +90,21 @@ def send_weather(access_token, weather):
 
 
 
-def weather_report(this_city):
-    # 1.获取access_token
+def weather_report():
+    # 1. 获取 access_token
     access_token = get_access_token()
-    # 2. 获取天气
-    weather = get_weather(this_city)
-    print(f"天气信息： {weather}")
-    # 3. 发送消息
+
+    # 2. 获取 太原市小店区 天气（区县级）
+    weather = get_weather_by_code(
+        city_code="101100107",
+        city_name="太原市小店区"
+    )
+
+    print(f"天气信息：{weather}")
+
+    # 3. 推送微信模板消息
     send_weather(access_token, weather)
+
 
 
 
