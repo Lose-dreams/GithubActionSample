@@ -4,6 +4,7 @@ import requests
 import json
 import datetime
 import time
+import random
 
 # 多人接收微信号，用逗号分隔
 # GitHub Secrets 示例: OPEN_ID=oBgkT3QA4nu7IZBtXMCJhsbOL8R8,oBgkT3btpd8TnK2llvaq30bqcsAA
@@ -21,80 +22,74 @@ TIMEOUT = 10       # 秒
 RETRY = 3          # 次数
 RETRY_DELAY = 5    # 秒
 
-def gentle_tip(min_t, max_t, rain):
-    """根据温度和降雨生成温柔提醒"""
-    min_t = int(min_t)
-    max_t = int(max_t)
-    rain = int(rain) if str(rain).isdigit() else 0
+# 情话库（短句备用）
+short_love_sentences = [
+    "今天也要开心哦~",
+    "你是我余生的欢喜",
+    "愿你被温柔以待",
+    "喜欢你，比昨天多一点",
+    "小心感冒，注意保暖",
+]
 
-    if rain >= 50:
-        return "今天可能会下雨，出门记得带伞 ☔"
-    if min_t <= -5:
-        return "今天真的很冷，多穿一点别着凉 🧣"
-    if max_t >= 30:
-        return "天气有点热，记得多喝水 ☀️"
-    return "记得照顾好自己，慢慢来就好 🌤️"
+def get_weather_from_cma():
+    """尝试从中国天气网获取天气信息"""
+    try:
+        url = "http://www.weather.com.cn/data/sk/101100101.html"  # 太原小店区
+        resp = requests.get(url, timeout=TIMEOUT)
+        data = resp.json()
+        weather_info = data["weatherinfo"]
+        city = weather_info["city"]
+        temp = f"{weather_info['temp']}℃"
+        wind = weather_info["WD"] + " " + weather_info["WS"]
+        return city, temp, "未知", wind, "未知", "未知"  # 天气/湿度/降雨概率先兜底
+    except:
+        return None
 
-def get_weather_by_code(city_code=None, city_name="太原市小店区"):
-    """获取天气信息，优先中国天气网，兜底 wttr.in"""
+def get_weather_by_wttr():
+    """使用 wttr.in 作为兜底"""
+    url = "https://wttr.in/Taiyuan?format=j1"
     for attempt in range(RETRY):
         try:
-            # 1️⃣ 尝试中国天气网接口
-            url = f"http://www.weather.com.cn/data/sk/101100501.html"  # 太原小店区示例代码
-            resp = requests.get(url, timeout=TIMEOUT)
-            data = resp.json().get("weatherinfo", {})
-            if data:
-                weather_cn = data.get("weather", "晴")
-                temp1 = data.get("temp1", "-4℃")
-                temp2 = data.get("temp2", "2℃")
-                wind = data.get("wind", "西北风 3km/h")
-                humidity = data.get("SD", "--").replace("%", "")
-                rain = data.get("rain", "0")
-                tip = gentle_tip(temp1.replace("℃","").replace("～",""), temp2.replace("℃","").replace("～",""), rain)
-                weather_text = (
-                    f"天气：{weather_cn}\n"
-                    f"气温：{temp1}～{temp2}\n"
-                    f"风向：{wind}\n"
-                    f"湿度：{humidity}%\n"
-                    f"降雨概率：{rain}%\n"
-                    f"{tip}"
-                )
-                return city_name, "", weather_text, ""
-            else:
-                raise Exception("中国天气网返回空数据")
-        except Exception as e:
-            print(f"获取中国天气网失败，尝试 wttr.in ({attempt+1}/{RETRY}): {e}")
-            time.sleep(RETRY_DELAY)
-
-    # 2️⃣ 兜底 wttr.in
-    for attempt in range(RETRY):
-        try:
-            url = "https://wttr.in/Taiyuan?format=j1"
             resp = requests.get(url, timeout=TIMEOUT)
             data = resp.json()
             today = data["weather"][0]
-            min_t = today["mintempC"]
-            max_t = today["maxtempC"]
-            weather_cn = today["hourly"][0]["weatherDesc"][0]["value"]
+            city_name = "太原市小店区"
+            temp = f"{today['mintempC']}～{today['maxtempC']}℃"
+            weather_desc = today["hourly"][0]["weatherDesc"][0]["value"]
             wind = today["hourly"][0]["windspeedKmph"] + " km/h"
-            humidity = today["hourly"][0].get("humidity", "--")
-            rain = today["hourly"][0].get("chanceofrain", "0")
-            tip = gentle_tip(min_t, max_t, rain)
-            weather_text = (
-                f"今天太原有点冷 ❄️\n"
-                f"天气：{weather_cn}\n"
-                f"气温：{min_t}～{max_t}℃\n"
-                f"风：{wind}\n"
-                f"湿度：{humidity}%\n"
-                f"降雨概率：{rain}%\n"
-                f"{tip}"
-            )
-            return city_name, "", weather_text, ""
+            humidity = today["hourly"][0]["humidity"] + "%"
+            rain_prob = today["hourly"][0].get("chanceofrain", "0%")
+            return city_name, temp, weather_desc, wind, humidity, rain_prob
         except Exception as e:
-            print(f"获取 wttr.in 数据失败，重试中 ({attempt+1}/{RETRY}): {e}")
+            print(f"获取 wttr.in 失败，重试中 ({attempt+1}/{RETRY}): {e}")
             time.sleep(RETRY_DELAY)
+    return "太原市小店区", "-4～2℃", "多云", "西北风 3km/h", "48%", "10%"
 
-    raise Exception("获取天气失败，请检查网络")
+def get_weather_info():
+    """获取天气信息，优先中国天气网，再 wttr.in"""
+    cma = get_weather_from_cma()
+    if cma:
+        city, temp, weather, wind, humidity, rain_prob = cma
+    else:
+        city, temp, weather, wind, humidity, rain_prob = get_weather_by_wttr()
+
+    # 简单温馨提示
+    tips = []
+    temp_numbers = [int(s) for s in temp.replace("℃","").replace("～","-").split("-") if s.strip("-").isdigit()]
+    if temp_numbers:
+        avg_temp = sum(temp_numbers)//len(temp_numbers)
+        if avg_temp <= 0:
+            tips.append("今天有点冷 ❄️")
+        elif avg_temp >= 30:
+            tips.append("今天比较热 🥵")
+    if "雨" in weather:
+        tips.append("记得带伞 ☔️")
+    tip_text = "，".join(tips) if tips else ""
+
+    # 拼接中文美化
+    weather_text = f"{tip_text} 天气：{weather}" if tip_text else f"天气：{weather}"
+
+    return city, temp, weather_text, wind, humidity, rain_prob
 
 def get_access_token():
     """获取微信 access_token，支持重试"""
@@ -115,24 +110,21 @@ def get_access_token():
     raise Exception("无法获取 access_token，请检查网络或配置")
 
 def get_daily_love():
-    """每日一句情话，支持重试"""
-    url = "https://api.lovelive.tools/api/SweetNothings/Serialization/Json"
-    for attempt in range(RETRY):
-        try:
-            r = requests.get(url, timeout=TIMEOUT)
-            all_dict = r.json()
-            sentence = all_dict['returnObj'][0]
-            return sentence
-        except Exception as e:
-            print(f"获取每日一句失败，重试中 ({attempt+1}/{RETRY}): {e}")
-            time.sleep(RETRY_DELAY)
-    return "今日心情：保持微笑~"
+    """每日一句情话，长度限制80字"""
+    try:
+        url = "https://api.lovelive.tools/api/SweetNothings/Serialization/Json"
+        r = requests.get(url, timeout=TIMEOUT)
+        all_dict = r.json()
+        sentence = all_dict['returnObj'][0]
+        if len(sentence) > 80:
+            sentence = random.choice(short_love_sentences)
+        return sentence
+    except:
+        return random.choice(short_love_sentences)
 
 def send_weather(access_token, weather):
-    """循环发送给每个微信号，支持重试"""
-    today = datetime.date.today()
-    today_str = today.strftime("%Y年%m月%d日")
-
+    today_str = datetime.date.today().strftime("%Y年%m月%d日")
+    city, temp, weather_desc, wind, humidity, rain_prob = weather
     for openId in openIds:
         body = {
             "touser": openId.strip(),
@@ -140,10 +132,12 @@ def send_weather(access_token, weather):
             "url": "https://weixin.qq.com",
             "data": {
                 "date": {"value": today_str},
-                "region": {"value": weather[0]},
-                "weather": {"value": weather[2]},
-                "temp": {"value": weather[1]},
-                "wind_dir": {"value": weather[3]},
+                "region": {"value": city},
+                "weather": {"value": weather_desc},
+                "temp": {"value": temp},
+                "wind_dir": {"value": wind},
+                "humidity": {"value": humidity},
+                "rain_prob": {"value": rain_prob},
                 "today_note": {"value": get_daily_love()}
             }
         }
@@ -168,10 +162,9 @@ def send_weather(access_token, weather):
             print(f"{openId.strip()} 最终推送失败")
 
 def weather_report():
-    """获取天气并推送"""
-    access_token = get_access_token()
-    weather = get_weather_by_code()
+    weather = get_weather_info()
     print(f"天气信息：{weather}")
+    access_token = get_access_token()
     send_weather(access_token, weather)
 
 if __name__ == '__main__':
