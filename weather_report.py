@@ -64,12 +64,13 @@ def get_weather():
 
     # 风速美化
     wind_kph = int(hour["windspeedKmph"])
+    wind_dir = hour.get("winddir", "")
     if wind_kph <= 5:
         wind = "微风（1级）"
     elif wind_kph <= 11:
         wind = "轻风（2级）"
     else:
-        wind = f"{hour['winddir']}（{wind_kph//3}级）"
+        wind = f"{wind_dir}（{wind_kph//3}级）"
 
     humidity = f"{hour['humidity']}%"
     rain_prob = f"{hour.get('chanceofrain','0')}%"
