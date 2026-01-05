@@ -7,7 +7,7 @@ import time
 # ========= 配置 ==========
 APP_ID = os.environ.get("APP_ID")
 APP_SECRET = os.environ.get("APP_SECRET")
-OPEN_ID = os.environ.get("OPEN_ID")
+OPEN_ID_LIST = os.environ.get("OPEN_ID").split(",")
 TEMPLATE_ID = os.environ.get("TEMPLATE_ID")
 
 TIMEOUT = 10
@@ -41,10 +41,12 @@ def get_weather():
     today = data["weather"][0]
     hour = today["hourly"][0]
 
+    # 气温
     min_t = today["mintempC"]
     max_t = today["maxtempC"]
     temp = f"{min_t}~{max_t}℃"
 
+    # 天气中文化
     weather_en = hour["weatherDesc"][0]["value"]
     weather_map = {
         "Clear": "晴",
@@ -114,28 +116,31 @@ def send_weather(token, weather):
             tips.append("注意保暖 🧣")
     except:
         pass
-    tip_text = "；".join(tips)
+    tip_text = "；".join(tips) if tips else " "
 
-    # 拼接多行字符串，每条信息换行
-    msg = f"小雷老师的专属天气预报\n今天: {today}\n地区: {city}\n天气: {weather_desc}\n气温: {temp}\n风向: {wind}\n对你说的话: {get_daily_love()}"
-    if tip_text:
-        msg += f"\n温馨提示: {tip_text}"
-
-    body = {
-        "touser": OPEN_ID.strip(),
-        "template_id": TEMPLATE_ID.strip(),
-        "url": "https://weixin.qq.com",
-        "data": {
-            "content": {"value": msg}
+    for open_id in OPEN_ID_LIST:
+        body = {
+            "touser": open_id.strip(),
+            "template_id": TEMPLATE_ID.strip(),
+            "url": "https://weixin.qq.com",
+            "data": {
+                "title": {"value": "小雷老师专属天气预报"},
+                "date": {"value": today},
+                "region": {"value": city},
+                "weather": {"value": weather_desc},
+                "temp": {"value": temp},
+                "wind_dir": {"value": wind},
+                "today_note": {"value": get_daily_love()},
+                "tip": {"value": tip_text},
+            }
         }
-    }
 
-    resp = request_with_retry(
-        "POST",
-        f"https://api.weixin.qq.com/cgi-bin/message/template/send?access_token={token}",
-        json=body
-    ).json()
-    print(resp)
+        resp = request_with_retry(
+            "POST",
+            f"https://api.weixin.qq.com/cgi-bin/message/template/send?access_token={token}",
+            json=body
+        ).json()
+        print(open_id, resp)
 
 # ========= 主入口 ==========
 def weather_report():
