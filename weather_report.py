@@ -14,7 +14,7 @@ TIMEOUT = 10
 RETRY = 3
 RETRY_DELAY = 5
 
-# ========= 情话兜底池（≤18字） =========
+# ========= 情话兜底（你现在实际用的是接口，这里只是防炸） =========
 LOVE_FALLBACK = [
     "今天也有人偷偷想你",
     "风很冷，但我很暖",
@@ -33,18 +33,31 @@ def request_with_retry(method, url, **kwargs):
             time.sleep(RETRY_DELAY)
     raise Exception("网络请求最终失败")
 
+# ========= 格式化工具 =========
+def format_temp(min_t, max_t):
+    return f"{min_t}～{max_t}℃"
+
+def wind_dir_from_degree(deg):
+    dirs = ["北风", "东北风", "东风", "东南风", "南风", "西南风", "西风", "西北风"]
+    return dirs[int((deg + 22.5) // 45) % 8]
+
+def format_wind(speed, degree):
+    speed = int(speed)
+    if speed <= 1:
+        return "微风"
+    return f"{wind_dir_from_degree(degree)} {speed} km/h"
+
 # ========= 天气获取（wttr.in） =========
 def get_weather():
     url = "https://wttr.in/Taiyuan?format=j1"
-    r = request_with_retry("GET", url)
-    data = r.json()
+    data = request_with_retry("GET", url).json()
 
     today = data["weather"][0]
     hour = today["hourly"][0]
 
-    min_t = today["mintempC"]
-    max_t = today["maxtempC"]
-    temp = f"{min_t}～{max_t}℃"
+    min_t = int(today["mintempC"])
+    max_t = int(today["maxtempC"])
+    temp = format_temp(min_t, max_t)
 
     weather_en = hour["weatherDesc"][0]["value"]
     weather_map = {
@@ -60,18 +73,12 @@ def get_weather():
     }
     weather = weather_map.get(weather_en, "多云")
 
-    wind = f"{hour['windspeedKmph']}km/h"
-    humidity = f"{hour['humidity']}%"
-    rain_prob = f"{hour.get('chanceofrain', '0')}%"
-
-    return (
-        "太原市小店区",
-        temp,
-        weather,
-        wind,
-        humidity,
-        rain_prob,
+    wind = format_wind(
+        hour.get("windspeedKmph", 0),
+        int(hour.get("winddirDegree", 0))
     )
+
+    return "太原市小店区", weather, temp, wind, min_t, max_t
 
 # ========= 获取微信 access_token =========
 def get_access_token():
@@ -83,68 +90,61 @@ def get_access_token():
         r = request_with_retry("GET", url).json()
         if "access_token" in r:
             return r["access_token"]
-        print("access_token 获取失败：", r)
         time.sleep(RETRY_DELAY)
     raise Exception("access_token 获取失败")
 
-# ========= 每日一句情话（网站 + 自动筛选 ≤18字） =========
+# ========= 每日一句情话（保持你现在逻辑） =========
 def get_daily_love():
-    """
-    使用 lovelive 情话接口，自动筛选 ≤18 字
-    """
     url = "https://api.lovelive.tools/api/SweetNothings/Serialization/Json"
+    try:
+        r = requests.get(url, timeout=TIMEOUT)
+        sentence = r.json().get("returnObj", [""])[0].strip()
+        if 4 <= len(sentence) <= 18:
+            return sentence
+    except:
+        pass
+    return random.choice(LOVE_FALLBACK)
 
-    for _ in range(5):  # 最多尝试 5 次
-        try:
-            r = requests.get(url, timeout=10)
-            all_dict = r.json()
-            sentence = all_dict.get("returnObj", [""])[0].strip()
+# ========= 自动温馨提示 =========
+def get_tips(weather, min_t, max_t):
+    tips = []
+    if "雨" in weather:
+        tips.append("记得带伞 ☔")
+    if min_t <= 1:
+        tips.append("注意保暖 🧣")
+    return "；".join(tips)
 
-            # 只接受 4～18 字，避免过短或过长
-            if 4 <= len(sentence) <= 18:
-                return sentence
-        except Exception as e:
-            print("情话获取失败，重试中：", e)
-            time.sleep(1)
-
-    # 兜底短句（防止折叠/翻车）
-    fallback = [
-        "今天也要照顾好自己",
-        "天冷了，记得多穿点",
-        "愿你今天心情很好",
-        "慢慢来，一切都会好",
-    ]
-    return random.choice(fallback)
-
-
-# ========= 推送天气 =========
-def send_weather(token, weather):
+# ========= 推送 =========
+def send_weather(token, weather_info):
     today = datetime.date.today().strftime("%Y年%m月%d日")
-    city, temp, weather_desc, wind, humidity, rain_prob = weather
+    city, weather, temp, wind, min_t, max_t = weather_info
+    tips = get_tips(weather, min_t, max_t)
 
     for open_id in OPEN_IDS:
+        data = {
+            "date": {"value": today},
+            "region": {"value": city},
+            "weather": {"value": weather},
+            "temp": {"value": temp},
+            "wind_dir": {"value": wind},
+            "today_note": {"value": get_daily_love()},
+        }
+
+        if tips:
+            data["tip"] = {"value": tips}
+
         body = {
             "touser": open_id.strip(),
             "template_id": TEMPLATE_ID,
-            "data": {
-                "date": {"value": today},
-                "region": {"value": city},
-                "weather": {"value": weather_desc},
-                "temp": {"value": temp},
-                "wind_dir": {"value": wind},
-                "humidity": {"value": humidity},
-                "rain_prob": {"value": rain_prob},
-                "today_note": {"value": get_daily_love()},
-            },
+            "data": data,
         }
 
-        r = request_with_retry(
+        resp = request_with_retry(
             "POST",
             f"https://api.weixin.qq.com/cgi-bin/message/template/send?access_token={token}",
             json=body,
         ).json()
-
-        print(open_id, r)
+        print(open_id, resp)
 
 # ========= 主入口 =========
 def main():
