@@ -24,25 +24,80 @@ RETRY_DELAY = 5    # 秒
 
 def get_weather_by_code(city_code=None, city_name="太原市小店区"):
     """
-    使用中国天气网 cityinfo 接口
-    返回：地区、温度区间、天气、风向风力
+    优先：中国天气网
+    兜底：wttr.in（温柔模板）
     """
-    # 太原市 code：101100101
-    url = "http://www.weather.com.cn/data/cityinfo/101100101.html"
-    headers = {
-        "User-Agent": "Mozilla/5.0"
-    }
+    # ========== ① 中国天气网 ==========
+    try:
+        url = "http://www.weather.com.cn/data/cityinfo/101100101.html"
+        headers = {
+            "User-Agent": "Mozilla/5.0"
+        }
+        resp = requests.get(url, headers=headers, timeout=TIMEOUT)
 
-    resp = requests.get(url, headers=headers, timeout=10)
-    data = resp.json()["weatherinfo"]
+        # 有时会返回空内容或 HTML，必须先判断
+        if resp.status_code == 200 and resp.text.strip().startswith("{"):
+            data = resp.json()["weatherinfo"]
 
-    # 温度区间，如 -1℃~4℃
-    temp = f'{data["temp1"].replace("℃","")}--{data["temp2"].replace("℃","")}摄氏度'
+            weather = data["weather"]   # 冻雨
+            temp = (
+                f'{data["temp1"].replace("℃","")}'
+                f'～{data["temp2"].replace("℃","")}℃'
+            )
+            wind = data["wind"]         # 南风<3级
 
-    weather = data["weather"]           # 冻雨
-    wind = data["wind"]                 # 南风<3级
+            return city_name, temp, weather, wind
 
-    return city_name, temp, weather, wind
+        else:
+            raise Exception("中国天气网返回非 JSON")
+
+    except Exception as e:
+        print("中国天气网失败，启用 wttr.in 兜底：", e)
+
+    # ========== ② wttr.in 兜底 ==========
+    try:
+        url = "https://wttr.in/Taiyuan?format=j1"
+        resp = requests.get(url, timeout=TIMEOUT)
+        data = resp.json()
+
+        today = data["weather"][0]
+        hour = today["hourly"][0]
+
+        min_t = today["mintempC"]
+        max_t = today["maxtempC"]
+        weather_en = hour["weatherDesc"][0]["value"]
+        wind_dir = hour["winddir16Point"]
+        wind_speed = hour["windspeedKmph"]
+
+        # 英文简单转中文（够用、不复杂）
+        weather_map = {
+            "Partly cloudy": "多云",
+            "Cloudy": "阴",
+            "Sunny": "晴",
+            "Clear": "晴",
+            "Light rain": "小雨",
+            "Rain": "雨",
+            "Snow": "雪"
+        }
+        weather_cn = weather_map.get(weather_en, weather_en)
+
+        temp = f"{min_t}～{max_t}℃"
+        wind = f"{wind_dir}风 {wind_speed}km/h"
+
+        # ⚠️ 这里是你指定的兜底模板
+        weather_text = (
+            f"今天太原有点冷 ❄️\n"
+            f"天气：{weather_cn}\n"
+            f"气温：{temp}\n"
+            f"风：{wind}\n"
+            f"记得多穿一点"
+        )
+
+        return city_name, temp, weather_text, wind
+
+    except Exception as e:
+        print("wttr.in 兜底也失败：", e)
+        return city_name, "--", "天气数据获取失败", "--"
 
 
 
