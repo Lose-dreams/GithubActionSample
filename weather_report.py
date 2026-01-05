@@ -76,8 +76,15 @@ def get_weather(city_name):
                     wind_night = "".join(wind_night_strs) if wind_night_strs else "--"
 
                     # 处理温度
-                    low_temp = low_temp if low_temp != "-" else high_temp
-                    high_temp = high_temp if high_temp != "-" else low_temp
+                    if low_temp == "-" and high_temp != "-":
+                        low_temp = high_temp
+                    if high_temp == "-" and low_temp != "-":
+                        high_temp = low_temp
+                    if low_temp == "-" and high_temp == "-":
+                        # 用 wttr.in 兜底
+                        low_temp = "0"
+                        high_temp = "0"
+
                     temp = f"{low_temp}~{high_temp}℃"
 
                     # 白天天气优先
@@ -89,7 +96,7 @@ def get_weather(city_name):
                         wind += "<3级"
                     else:
                         digits = "".join([c for c in wind if c.isdigit()])
-                        wind += f"（{digits}级）" if digits else "（1级）"
+                        wind += f"（{digits if digits else '1'}级）"
 
                     return this_city, temp, weather_typ, wind
     # 兜底
@@ -149,7 +156,7 @@ def send_weather(access_token, weather):
             "temp": {"value": temp},
             "wind_dir": {"value": wind},
             "today_note": {"value": get_daily_love()},
-            "tip": {"value": tip_text or ""}  # 确保 tip 不为空
+            "tip": {"value": tip_text or ""}  # 保证 tip 不为空
         }
     }
 
