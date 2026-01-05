@@ -74,10 +74,11 @@ def get_weather():
     }
     weather = weather_map.get(weather_en, "多云")
 
-    wind = format_wind(
-        hour.get("windspeedKmph", 0),
-        int(hour.get("winddirDegree", 0))
-    )
+    wind_speed = hour.get("windspeedKmph", 0)
+    wind_degree = hour.get("winddirDegree", 0)
+    if wind_degree == "":
+        wind_degree = 0
+    wind = format_wind(wind_speed, int(wind_degree))
 
     return "太原市小店区", weather, temp, wind, min_t, max_t
 
