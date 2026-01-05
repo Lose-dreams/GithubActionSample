@@ -23,21 +23,27 @@ RETRY_DELAY = 5    # 秒
 
 
 def get_weather_by_code(city_code=None, city_name="太原市小店区"):
-    """使用 wttr.in 获取太原小店区天气（稳定、支持GitHub Actions）"""
-    url = "https://wttr.in/Taiyuan?format=j1"
-    for attempt in range(RETRY):
-        try:
-            resp = requests.get(url, timeout=TIMEOUT)
-            data = resp.json()
-            today = data["weather"][0]
-            temp = f'{today["avgtempC"]}℃'
-            weather = today["hourly"][0]["weatherDesc"][0]["value"]
-            wind = today["hourly"][0]["windspeedKmph"] + " km/h"
-            return city_name, temp, weather, wind
-        except Exception as e:
-            print(f"获取天气失败，重试中 ({attempt+1}/{RETRY}): {e}")
-            time.sleep(RETRY_DELAY)
-    raise Exception("获取天气失败，请检查网络")
+    """
+    使用中国天气网 cityinfo 接口
+    返回：地区、温度区间、天气、风向风力
+    """
+    # 太原市 code：101100101
+    url = "http://www.weather.com.cn/data/cityinfo/101100101.html"
+    headers = {
+        "User-Agent": "Mozilla/5.0"
+    }
+
+    resp = requests.get(url, headers=headers, timeout=10)
+    data = resp.json()["weatherinfo"]
+
+    # 温度区间，如 -1℃~4℃
+    temp = f'{data["temp1"].replace("℃","")}--{data["temp2"].replace("℃","")}摄氏度'
+
+    weather = data["weather"]           # 冻雨
+    wind = data["wind"]                 # 南风<3级
+
+    return city_name, temp, weather, wind
+
 
 
 def get_access_token():
