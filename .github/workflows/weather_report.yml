@@ -15,22 +15,19 @@ jobs:
     env:
       TZ: Asia/Shanghai
     steps:
-      - uses: actions/checkout@v3
-
-      - name: Set up Python
-        uses: actions/setup-python@v3
-        with:
-          python-version: '3.12'
-
-      - name: Install dependencies
-        run: |
-          python -m pip install --upgrade pip
-          pip install requests
-
-      - name: Run weather report
-        run: python weather_report.py
-        env:
-          APP_ID: ${{ secrets.APP_ID }}
-          APP_SECRET: ${{ secrets.APP_SECRET }}
-          OPEN_ID: ${{ secrets.OPEN_ID }}
-          TEMPLATE_ID: ${{ secrets.TEMPLATE_ID }}
+    - uses: actions/checkout@v3
+    - name: Set up Python
+      uses: actions/setup-python@v3
+      with:
+        python-version: '3.12'
+    - name: Install dependencies
+      run: |
+        python -m pip install --upgrade pip
+        pip install requests
+    - name: Run weather report
+      run: python weather_report.py
+      env:
+        APP_ID: ${{ secrets.APP_ID }}
+        APP_SECRET: ${{ secrets.APP_SECRET }}
+        OPEN_ID: ${{ secrets.OPEN_ID }}
+        TEMPLATE_ID: ${{ secrets.TEMPLATE_ID }}
