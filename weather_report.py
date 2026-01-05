@@ -8,10 +8,10 @@ import random
 import time
 
 # ========= 配置 =========
-appID = os.environ.get("APP_ID")
-appSecret = os.environ.get("APP_SECRET")
-openId = os.environ.get("OPEN_ID")
-weather_template_id = os.environ.get("TEMPLATE_ID")
+APP_ID = os.environ.get("APP_ID")
+APP_SECRET = os.environ.get("APP_SECRET")
+OPEN_ID = os.environ.get("OPEN_ID")
+TEMPLATE_ID = os.environ.get("TEMPLATE_ID")
 
 TIMEOUT = 10
 RETRY = 3
@@ -37,7 +37,7 @@ def request_with_retry(method, url, **kwargs):
     raise Exception("网络请求最终失败")
 
 # ========= 获取天气 =========
-def get_weather(my_city):
+def get_weather(city_name):
     urls = [
         "http://www.weather.com.cn/textFC/hb.shtml",
         "http://www.weather.com.cn/textFC/db.shtml",
@@ -59,7 +59,7 @@ def get_weather(my_city):
                 tds = tr.find_all("td")
                 city_td = tds[-8]
                 this_city = list(city_td.stripped_strings)[0]
-                if this_city == my_city:
+                if this_city == city_name:
                     high_temp_td = tds[-5]
                     low_temp_td = tds[-2]
                     weather_type_day_td = tds[-7]
@@ -85,15 +85,16 @@ def get_weather(my_city):
                     if "无持续风向" in wind:
                         wind += "<3级"
                     else:
-                        wind += "（" + "".join([c for c in wind if c.isdigit()]) + "级）" if any(c.isdigit() for c in wind) else ""
+                        digits = "".join([c for c in wind if c.isdigit()])
+                        wind += f"（{digits}级）" if digits else "（1级）"
 
                     return this_city, temp, weather_typ, wind
     # 兜底
-    return my_city, "0~0摄氏度", "多云", "微风（1级）"
+    return city_name, "0~0摄氏度", "多云", "微风（1级）"
 
 # ========= 获取微信 access_token =========
 def get_access_token():
-    url = f'https://api.weixin.qq.com/cgi-bin/token?grant_type=client_credential&appid={appID.strip()}&secret={appSecret.strip()}'
+    url = f'https://api.weixin.qq.com/cgi-bin/token?grant_type=client_credential&appid={APP_ID.strip()}&secret={APP_SECRET.strip()}'
     for _ in range(RETRY):
         r = request_with_retry("GET", url).json()
         if "access_token" in r:
@@ -125,15 +126,17 @@ def send_weather(access_token, weather):
     tips = []
     if "雨" in weather_typ:
         tips.append("记得带伞 ☔")
-    if temp:
+    try:
         min_temp = int(temp.split("~")[0])
         if min_temp <= 1:
             tips.append("注意保暖 🧣")
+    except:
+        pass
     tip_text = "；".join(tips)
 
     body = {
-        "touser": openId.strip(),
-        "template_id": weather_template_id.strip(),
+        "touser": OPEN_ID.strip(),
+        "template_id": TEMPLATE_ID.strip(),
         "url": "https://weixin.qq.com",
         "data": {
             "date": {"value": today},
@@ -142,11 +145,15 @@ def send_weather(access_token, weather):
             "temp": {"value": temp},
             "wind_dir": {"value": wind},
             "today_note": {"value": get_daily_love()},
-            "tip": {"value": tip_text},  # 即使为空也显示
+            "tip": {"value": tip_text},  # 保证 tip 字段存在
         }
     }
 
-    resp = request_with_retry("POST", f'https://api.weixin.qq.com/cgi-bin/message/template/send?access_token={access_token}', json=body).json()
+    resp = request_with_retry(
+        "POST",
+        f'https://api.weixin.qq.com/cgi-bin/message/template/send?access_token={access_token}',
+        json=body
+    ).json()
     print(resp)
 
 # ========= 主入口 =========
@@ -157,5 +164,5 @@ def weather_report(city_name):
     send_weather(access_token, weather)
 
 if __name__ == "__main__":
-    # 修改这里城市即可
+    # 修改城市即可
     weather_report("太原市小店区")
