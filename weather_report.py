@@ -116,19 +116,17 @@ def send_weather(token, weather):
         pass
     tip_text = "；".join(tips)
 
+    # 拼接多行字符串，每条信息换行
+    msg = f"小雷老师的专属天气预报\n今天: {today}\n地区: {city}\n天气: {weather_desc}\n气温: {temp}\n风向: {wind}\n对你说的话: {get_daily_love()}"
+    if tip_text:
+        msg += f"\n温馨提示: {tip_text}"
+
     body = {
         "touser": OPEN_ID.strip(),
         "template_id": TEMPLATE_ID.strip(),
         "url": "https://weixin.qq.com",
         "data": {
-            "title": {"value": "小雷老师的专属天气预报"},
-            "date": {"value": today},
-            "region": {"value": city},
-            "weather": {"value": weather_desc},
-            "temp": {"value": temp},
-            "wind_dir": {"value": wind},
-            "today_note": {"value": get_daily_love()},
-            "tip": {"value": tip_text or ""}  # 保证 tip 不为空
+            "content": {"value": msg}
         }
     }
 
