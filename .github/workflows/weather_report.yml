@@ -1,10 +1,14 @@
-name: 天气预报推送
+# .github/workflows/weather_report.yml
+name: 小雷老师专属天气推送
 
 on:
   schedule:
-    # 每天北京时间早 7 点（UTC 23:00）
+    # 每天北京时间早7点推送
     - cron: '0 23 * * *'
   workflow_dispatch:
+
+permissions:
+  contents: read
 
 jobs:
   build:
@@ -15,19 +19,18 @@ jobs:
       - uses: actions/checkout@v3
 
       - name: Set up Python
-        uses: actions/setup-python@v4
+        uses: actions/setup-python@v3
         with:
           python-version: '3.12'
 
       - name: Install dependencies
         run: |
           python -m pip install --upgrade pip
-          pip install requests
+          pip install requests html5lib bs4
 
       - name: Run weather report
+        run: python weather_report.py
         env:
           APP_ID: ${{ secrets.APP_ID }}
           APP_SECRET: ${{ secrets.APP_SECRET }}
-          OPEN_ID: ${{ secrets.OPEN_ID }}
-          TEMPLATE_ID: ${{ secrets.TEMPLATE_ID }}
-        run: python weather_report.py
+          OPEN_ID: ${{ secrets.OPEN_ID }
