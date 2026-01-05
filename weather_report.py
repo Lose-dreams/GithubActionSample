@@ -4,7 +4,7 @@ import datetime
 import random
 import time
 
-# ========== 配置 ==========
+# ========= 配置 ==========
 APP_ID = os.environ.get("APP_ID")
 APP_SECRET = os.environ.get("APP_SECRET")
 OPEN_ID = os.environ.get("OPEN_ID")
@@ -22,7 +22,7 @@ LOVE_FALLBACK = [
     "愿你被温柔以待",
 ]
 
-# ========== 通用请求重试 ==========
+# ========= 通用请求重试 ==========
 def request_with_retry(method, url, **kwargs):
     for i in range(RETRY):
         try:
@@ -32,7 +32,7 @@ def request_with_retry(method, url, **kwargs):
             time.sleep(RETRY_DELAY)
     raise Exception("网络请求最终失败")
 
-# ========== 获取天气（wttr.in） ==========
+# ========= 获取天气（wttr.in） ==========
 def get_weather():
     url = "https://wttr.in/Taiyuan?format=j1"
     r = request_with_retry("GET", url)
@@ -45,7 +45,20 @@ def get_weather():
     max_t = today["maxtempC"]
     temp = f"{min_t}~{max_t}℃"
 
-    weather_desc = hour["weatherDesc"][0]["value"]
+    weather_en = hour["weatherDesc"][0]["value"]
+    weather_map = {
+        "Clear": "晴",
+        "Sunny": "晴",
+        "Partly Cloudy": "多云",
+        "Cloudy": "阴",
+        "Overcast": "阴",
+        "Light rain": "小雨",
+        "Moderate rain": "中雨",
+        "Heavy rain": "大雨",
+        "Showers": "阵雨",
+        "Snow": "下雪",
+    }
+    weather_desc = weather_map.get(weather_en, "多云")
 
     # 风速美化
     wind_kph = int(hour["windspeedKmph"])
@@ -61,7 +74,7 @@ def get_weather():
 
     return "太原市小店区", temp, weather_desc, wind, humidity, rain_prob
 
-# ========== 获取微信 access_token ==========
+# ========= 获取微信 access_token ==========
 def get_access_token():
     url = f"https://api.weixin.qq.com/cgi-bin/token?grant_type=client_credential&appid={APP_ID.strip()}&secret={APP_SECRET.strip()}"
     for _ in range(RETRY):
@@ -72,7 +85,7 @@ def get_access_token():
         time.sleep(RETRY_DELAY)
     raise Exception("access_token 获取失败")
 
-# ========== 获取每日情话 ==========
+# ========= 获取每日情话 ==========
 def get_daily_love():
     url = "https://api.lovelive.tools/api/SweetNothings/Serialization/Json"
     for _ in range(5):
@@ -86,7 +99,7 @@ def get_daily_love():
             time.sleep(1)
     return random.choice(LOVE_FALLBACK)
 
-# ========== 发送微信模板消息 ==========
+# ========= 发送微信模板消息 ==========
 def send_weather(token, weather):
     today = datetime.date.today().strftime("%Y年%m月%d日")
     city, temp, weather_desc, wind, humidity, rain_prob = weather
@@ -126,7 +139,7 @@ def send_weather(token, weather):
     ).json()
     print(resp)
 
-# ========== 主入口 ==========
+# ========= 主入口 ==========
 def weather_report():
     token = get_access_token()
     weather = get_weather()
