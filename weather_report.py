@@ -89,22 +89,33 @@ def get_access_token():
 
 # ========= 每日一句情话（网站 + 自动筛选 ≤18字） =========
 def get_daily_love():
-    url = "https://v1.hitokoto.cn/?c=h&encode=json"
+    """
+    使用 lovelive 情话接口，自动筛选 ≤18 字
+    """
+    url = "https://api.lovelive.tools/api/SweetNothings/Serialization/Json"
 
-    for _ in range(5):
+    for _ in range(5):  # 最多尝试 5 次
         try:
-            r = requests.get(url, timeout=TIMEOUT)
-            data = r.json()
-            sentence = data.get("hitokoto", "").strip()
+            r = requests.get(url, timeout=10)
+            all_dict = r.json()
+            sentence = all_dict.get("returnObj", [""])[0].strip()
 
-            # 只接受 4～18 字
+            # 只接受 4～18 字，避免过短或过长
             if 4 <= len(sentence) <= 18:
                 return sentence
         except Exception as e:
             print("情话获取失败，重试中：", e)
             time.sleep(1)
 
-    return random.choice(LOVE_FALLBACK)
+    # 兜底短句（防止折叠/翻车）
+    fallback = [
+        "今天也要照顾好自己",
+        "天冷了，记得多穿点",
+        "愿你今天心情很好",
+        "慢慢来，一切都会好",
+    ]
+    return random.choice(fallback)
+
 
 # ========= 推送天气 =========
 def send_weather(token, weather):
