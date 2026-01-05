@@ -1,7 +1,5 @@
 import os
 import requests
-import json
-from bs4 import BeautifulSoup
 import datetime
 import random
 import time
@@ -34,77 +32,38 @@ def request_with_retry(method, url, **kwargs):
             time.sleep(RETRY_DELAY)
     raise Exception("网络请求最终失败")
 
-# ========== 获取天气 ==========
-def get_weather(city_name):
-    urls = [
-        "http://www.weather.com.cn/textFC/hb.shtml",
-        "http://www.weather.com.cn/textFC/db.shtml",
-        "http://www.weather.com.cn/textFC/hd.shtml",
-        "http://www.weather.com.cn/textFC/hz.shtml",
-        "http://www.weather.com.cn/textFC/hn.shtml",
-        "http://www.weather.com.cn/textFC/xb.shtml",
-        "http://www.weather.com.cn/textFC/xn.shtml"
-    ]
-    for url in urls:
-        resp = request_with_retry("GET", url)
-        text = resp.content.decode("utf-8")
-        soup = BeautifulSoup(text, 'html5lib')
-        div_conMidtab = soup.find("div", class_="conMidtab")
-        tables = div_conMidtab.find_all("table")
-        for table in tables:
-            trs = table.find_all("tr")[2:]
-            for tr in trs:
-                tds = tr.find_all("td")
-                city_td = tds[-8]
-                this_city = list(city_td.stripped_strings)[0]
-                if this_city == city_name:
-                    high_temp_td = tds[-5]
-                    low_temp_td = tds[-2]
-                    weather_type_day_td = tds[-7]
-                    weather_type_night_td = tds[-4]
-                    wind_td_day = tds[-6]
-                    wind_td_day_night = tds[-3]
+# ========== 获取天气（wttr.in） ==========
+def get_weather():
+    url = "https://wttr.in/Taiyuan?format=j1"
+    r = request_with_retry("GET", url)
+    data = r.json()
 
-                    high_temp = list(high_temp_td.stripped_strings)[0]
-                    low_temp = list(low_temp_td.stripped_strings)[0]
-                    weather_typ_day = list(weather_type_day_td.stripped_strings)[0]
-                    weather_type_night = list(weather_type_night_td.stripped_strings)[0]
+    today = data["weather"][0]
+    hour = today["hourly"][0]
 
-                    wind_day_strs = list(wind_td_day.stripped_strings)
-                    wind_day = "".join(wind_day_strs) if wind_day_strs else "--"
-                    wind_night_strs = list(wind_td_day_night.stripped_strings)
-                    wind_night = "".join(wind_night_strs) if wind_night_strs else "--"
+    min_t = today["mintempC"]
+    max_t = today["maxtempC"]
+    temp = f"{min_t}~{max_t}℃"
 
-                    # 处理温度
-                    if low_temp == "-" and high_temp != "-":
-                        low_temp = high_temp
-                    if high_temp == "-" and low_temp != "-":
-                        high_temp = low_temp
-                    if low_temp == "-" and high_temp == "-":
-                        # 用 wttr.in 兜底
-                        low_temp = "0"
-                        high_temp = "0"
+    weather_desc = hour["weatherDesc"][0]["value"]
 
-                    temp = f"{low_temp}~{high_temp}℃"
+    # 风速美化
+    wind_kph = int(hour["windspeedKmph"])
+    if wind_kph <= 5:
+        wind = "微风（1级）"
+    elif wind_kph <= 11:
+        wind = "轻风（2级）"
+    else:
+        wind = f"{hour['winddir']}（{wind_kph//3}级）"
 
-                    # 白天天气优先
-                    weather_typ = weather_typ_day if weather_typ_day != "-" else weather_type_night
+    humidity = f"{hour['humidity']}%"
+    rain_prob = f"{hour.get('chanceofrain','0')}%"
 
-                    # 风向美化
-                    wind = wind_day if wind_day != "--" else wind_night
-                    if "无持续风向" in wind:
-                        wind += "<3级"
-                    else:
-                        digits = "".join([c for c in wind if c.isdigit()])
-                        wind += f"（{digits if digits else '1'}级）"
-
-                    return this_city, temp, weather_typ, wind
-    # 兜底
-    return city_name, "0~0℃", "多云", "微风（1级）"
+    return "太原市小店区", temp, weather_desc, wind, humidity, rain_prob
 
 # ========== 获取微信 access_token ==========
 def get_access_token():
-    url = f'https://api.weixin.qq.com/cgi-bin/token?grant_type=client_credential&appid={APP_ID.strip()}&secret={APP_SECRET.strip()}'
+    url = f"https://api.weixin.qq.com/cgi-bin/token?grant_type=client_credential&appid={APP_ID.strip()}&secret={APP_SECRET.strip()}"
     for _ in range(RETRY):
         r = request_with_retry("GET", url).json()
         if "access_token" in r:
@@ -127,14 +86,14 @@ def get_daily_love():
             time.sleep(1)
     return random.choice(LOVE_FALLBACK)
 
-# ========== 推送天气 ==========
-def send_weather(access_token, weather):
+# ========== 发送微信模板消息 ==========
+def send_weather(token, weather):
     today = datetime.date.today().strftime("%Y年%m月%d日")
-    city, temp, weather_typ, wind = weather
+    city, temp, weather_desc, wind, humidity, rain_prob = weather
 
     # 温馨提示
     tips = []
-    if "雨" in weather_typ:
+    if "雨" in weather_desc:
         tips.append("记得带伞 ☔")
     try:
         min_temp = int(temp.split("~")[0].replace("℃",""))
@@ -152,7 +111,7 @@ def send_weather(access_token, weather):
             "title": {"value": "小雷老师的专属天气预报"},
             "date": {"value": today},
             "region": {"value": city},
-            "weather": {"value": weather_typ},
+            "weather": {"value": weather_desc},
             "temp": {"value": temp},
             "wind_dir": {"value": wind},
             "today_note": {"value": get_daily_love()},
@@ -162,17 +121,17 @@ def send_weather(access_token, weather):
 
     resp = request_with_retry(
         "POST",
-        f'https://api.weixin.qq.com/cgi-bin/message/template/send?access_token={access_token}',
+        f"https://api.weixin.qq.com/cgi-bin/message/template/send?access_token={token}",
         json=body
     ).json()
     print(resp)
 
 # ========== 主入口 ==========
-def weather_report(city_name):
-    access_token = get_access_token()
-    weather = get_weather(city_name)
-    print(f"天气信息: {weather}")
-    send_weather(access_token, weather)
+def weather_report():
+    token = get_access_token()
+    weather = get_weather()
+    print("天气信息:", weather)
+    send_weather(token, weather)
 
 if __name__ == "__main__":
-    weather_report("太原市小店区")
+    weather_report()
