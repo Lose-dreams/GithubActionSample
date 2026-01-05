@@ -1,11 +1,12 @@
+# weather_report.py
 import os
 import requests
 import datetime
 import time
 import random
 
-# ========= 基础配置 =========
-OPEN_IDS = os.environ.get("OPEN_ID").split(",")
+# ========= 配置 =========
+OPEN_IDS = os.environ.get("OPEN_ID", "").split(",")
 APP_ID = os.environ.get("APP_ID")
 APP_SECRET = os.environ.get("APP_SECRET")
 TEMPLATE_ID = os.environ.get("TEMPLATE_ID")
@@ -14,7 +15,7 @@ TIMEOUT = 10
 RETRY = 3
 RETRY_DELAY = 5
 
-# ========= 情话兜底（你现在实际用的是接口，这里只是防炸） =========
+# 情话兜底（≤18字）
 LOVE_FALLBACK = [
     "今天也有人偷偷想你",
     "风很冷，但我很暖",
@@ -33,7 +34,7 @@ def request_with_retry(method, url, **kwargs):
             time.sleep(RETRY_DELAY)
     raise Exception("网络请求最终失败")
 
-# ========= 格式化工具 =========
+# ========= 格式化 =========
 def format_temp(min_t, max_t):
     return f"{min_t}～{max_t}℃"
 
@@ -47,7 +48,7 @@ def format_wind(speed, degree):
         return "微风"
     return f"{wind_dir_from_degree(degree)} {speed} km/h"
 
-# ========= 天气获取（wttr.in） =========
+# ========= 获取天气 =========
 def get_weather():
     url = "https://wttr.in/Taiyuan?format=j1"
     data = request_with_retry("GET", url).json()
@@ -82,30 +83,30 @@ def get_weather():
 
 # ========= 获取微信 access_token =========
 def get_access_token():
-    url = (
-        "https://api.weixin.qq.com/cgi-bin/token"
-        f"?grant_type=client_credential&appid={APP_ID}&secret={APP_SECRET}"
-    )
+    url = f"https://api.weixin.qq.com/cgi-bin/token?grant_type=client_credential&appid={APP_ID}&secret={APP_SECRET}"
     for _ in range(RETRY):
         r = request_with_retry("GET", url).json()
         if "access_token" in r:
             return r["access_token"]
+        print("access_token 获取失败:", r)
         time.sleep(RETRY_DELAY)
     raise Exception("access_token 获取失败")
 
-# ========= 每日一句情话（保持你现在逻辑） =========
+# ========= 获取每日情话 =========
 def get_daily_love():
     url = "https://api.lovelive.tools/api/SweetNothings/Serialization/Json"
-    try:
-        r = requests.get(url, timeout=TIMEOUT)
-        sentence = r.json().get("returnObj", [""])[0].strip()
-        if 4 <= len(sentence) <= 18:
-            return sentence
-    except:
-        pass
+    for _ in range(5):
+        try:
+            r = requests.get(url, timeout=TIMEOUT)
+            sentence = r.json().get("returnObj", [""])[0].strip()
+            if 4 <= len(sentence) <= 18:
+                return sentence
+        except Exception as e:
+            print("情话获取失败，重试中:", e)
+            time.sleep(1)
     return random.choice(LOVE_FALLBACK)
 
-# ========= 自动温馨提示 =========
+# ========= 温馨提示 =========
 def get_tips(weather, min_t, max_t):
     tips = []
     if "雨" in weather:
@@ -128,10 +129,8 @@ def send_weather(token, weather_info):
             "temp": {"value": temp},
             "wind_dir": {"value": wind},
             "today_note": {"value": get_daily_love()},
+            "tip": {"value": tips},  # 即使为空也不会报错
         }
-
-        if tips:
-            data["tip"] = {"value": tips}
 
         body = {
             "touser": open_id.strip(),
