@@ -50,21 +50,9 @@ def get_weather():
     temp = f"{forecast['nighttemp']}~{forecast['daytemp']}℃"
     wind = f"{forecast['daywind']}风{forecast['daypower']}级"
 
-    # ===== 温馨提示 =====
-    tips = []
-    if "雨" in weather_desc or "雪" in weather_desc:
-        tips.append("记得带伞 ☔")
-    try:
-        min_temp = int(forecast['nighttemp'])
-        if min_temp <= 1:
-            tips.append("注意保暖 🧣")
-    except:
-        pass
-    tip_text = "；".join(tips) if tips else ""
+    return CITY, temp, weather_desc, wind
 
-    return CITY, temp, weather_desc, wind, tip_text
-
-# ========= access_token ==========
+# ========= 获取 access_token ==========
 def get_access_token():
     url = (
         "https://api.weixin.qq.com/cgi-bin/token"
@@ -94,7 +82,7 @@ def get_daily_love():
 # ========= 发送模板消息 ==========
 def send_weather(token, weather):
     today = datetime.date.today().strftime("%Y年%m月%d日")
-    city, temp, weather_desc, wind, tip_text = weather
+    city, temp, weather_desc, wind = weather
 
     for open_id in OPEN_ID_LIST:
         body = {
@@ -103,9 +91,10 @@ def send_weather(token, weather):
             "data": {
                 "date": {"value": today},
                 "region": {"value": city},
-                "weather": {"value": f"{weather_desc}，气温{temp}，{wind}🌬"},
+                "weather": {"value": weather_desc},
+                "temp": {"value": temp},
+                "wind_dir": {"value": wind},
                 "today_note": {"value": get_daily_love()},
-                "tip": {"value": tip_text}
             }
         }
         resp = request_with_retry(
